@@ -1,0 +1,65 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: event-cwl-exporter-cr
+rules:
+  - apiGroups: [""]
+    resources:
+      - events
+    verbs: ["list", "watch", "get"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: event-cwl-exporter-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: event-cwl-exporter-crb
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: event-cwl-exporter-cr
+subjects:
+  - kind: ServiceAccount
+    name: event-cwl-exporter-sa
+    namespace: default
+---
+apiVersion: v1
+data:
+  CW_LOG_GROUP_NAME: "/aws/eks/{{EKS cluster name}}/events"
+  CW_LOG_STREAM_NAME: "event-cwl-exporter"
+  AWS_REGION: "us-west-2"
+kind: ConfigMap
+metadata:
+  name: event-cwl-exporter-cm
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: event-cwl-exporter
+  name: event-cwl-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: event-cwl-exporter
+  template:
+    metadata:
+      labels:
+        app: event-cwl-exporter
+    spec:
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+        beta.kubernetes.io/arch: amd64
+      serviceAccountName: event-cwl-exporter-sa
+      containers:
+      - image: {{Image URI}}
+        name: event-cwl-exporter
+        envFrom:
+          - configMapRef:
+              name: event-cwl-exporter-cm
